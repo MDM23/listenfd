@@ -9,6 +9,9 @@ readme = "README.md"
 license = "Apache-2.0"
 edition = "2018"
 
+[dependencies]
+tracing = "0.1"
+
 [target."cfg(not(windows))".dependencies]
 libc = "0.2.40"
 

@@ -6,6 +6,7 @@ use std::os::unix::io::{FromRawFd, RawFd};
 use std::os::unix::net::UnixListener;
 
 use libc;
+use tracing::debug;
 
 pub type FdType = RawFd;
 
@@ -35,18 +36,39 @@ fn validate_socket(
         let mut ty_len = mem::size_of_val(&ty) as libc::c_uint;
         let mut sockaddr: libc::sockaddr = mem::zeroed();
         let mut sockaddr_len = mem::size_of_val(&sockaddr) as libc::c_uint;
-        libc::getsockname(fd, &mut sockaddr, &mut sockaddr_len) == 0
-            && libc::getsockopt(
+
+        (|| {
+            match libc::getsockname(fd, &mut sockaddr, &mut sockaddr_len) {
+                0 => (),
+                result => {
+                    debug!(result, "getsockname failed");
+                    return false;
+                }
+            }
+
+            debug!(sockaddr.sa_family, sock_fam);
+
+            match libc::getsockopt(
                 fd,
                 libc::SOL_SOCKET,
                 libc::SO_TYPE,
                 mem::transmute(&mut ty),
                 &mut ty_len,
-            ) == 0
-            && ty == sock_type
-            && (sockaddr.sa_family as libc::c_int == sock_fam
-                || (sockaddr.sa_family as libc::c_int == libc::AF_INET6
-                    && sock_fam == libc::AF_INET))
+            ) {
+                0 => (),
+                result => {
+                    debug!(result, "getsockopt failed");
+                    return false;
+                }
+            }
+
+            debug!(ty, sock_type);
+
+            ty == sock_type
+                && (sockaddr.sa_family as libc::c_int == sock_fam
+                    || (sockaddr.sa_family as libc::c_int == libc::AF_INET6
+                        && sock_fam == libc::AF_INET))
+        })()
     };
 
     if !is_valid {
